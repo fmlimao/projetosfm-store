@@ -1,3 +1,6 @@
+console.clear()
+
+const conn = require('./src/database/conn')
 const cookieParser = require('cookie-parser')
 const express = require('express')
 const expressLayouts = require('express-ejs-layouts')
@@ -28,19 +31,37 @@ const verifyAuthMiddleware = (req, res, next) => {
 }
 
 const verifyCartMiddleware = (req, res, next) => {
-  if (req.cookies.cart) {
-    res.locals.cart = req.cookies.cart
-  } else {
-    res.locals.cart = {
-      items: []
-    }
-  }
+  res.locals.cart = req.cookies.cart || {}
+  res.locals.cart.items = res.locals.cart.items || []
+
+  // atualizando total por item
+  res.locals.cart.items = res.locals.cart.items.map(item => {
+    item.total = Number((item.price * item.quantity).toFixed(2))
+    return item
+  })
+
+  // atualizando totais dos itens
+  res.locals.cart.total = res.locals.cart.items.reduce((total, item) => {
+    return Number((total + item.total).toFixed(2))
+  }, 0)
+
+  res.cookie('cart', res.locals.cart)
 
   next()
 }
 
-app.get('/', verifyAuthMiddleware, verifyCartMiddleware, (req, res) => {
-  res.render('home', {})
+app.get('/', verifyAuthMiddleware, verifyCartMiddleware, async (req, res) => {
+  const products = await conn.getAll(`
+    SELECT product_id, name, price
+    FROM products
+    WHERE deleted_at IS NULL
+    AND active = 1
+    ORDER BY name;
+  `)
+
+  res.render('home', {
+    products
+  })
 })
 
 app.get('/login', verifyAuthMiddleware, verifyCartMiddleware, (req, res) => {
@@ -134,7 +155,66 @@ app.get('/cart', verifyAuthMiddleware, verifyCartMiddleware, (req, res) => {
   })
 })
 
+app.post('/cart-add', verifyAuthMiddleware, verifyCartMiddleware, async (req, res) => {
+  const productId = Number(req.body.product_id || null)
+  const quantity = Number(req.body.quantity || null)
+
+  // buscar produto
+  const product = await conn.getOne(`
+    SELECT product_id, name, price
+    FROM products
+    WHERE deleted_at IS NULL
+    AND active = 1
+    AND product_id = :productId
+    LIMIT 1;
+  `, {
+    productId
+  })
+
+  if (product) {
+    // verificar se o produto já está no carrinho
+    const item = res.locals.cart.items.find(item => item.product_id === productId)
+
+    if (item) {
+      item.quantity += quantity
+    } else {
+      // adicionar ao carrinho
+      res.locals.cart.items.push({
+        ...product,
+        quantity
+      })
+    }
+
+    res.cookie('cart', res.locals.cart)
+  }
+
+  // redirecionar para a home
+  res.redirect('/')
+})
+
+app.post('/cart-item-update', verifyAuthMiddleware, verifyCartMiddleware, async (req, res) => {
+  const productId = Number(req.body.product_id || null)
+  const quantity = Number(req.body.quantity || null)
+
+  // verificar se o produto já está no carrinho
+  const item = res.locals.cart.items.find(item => item.product_id === productId)
+
+  if (item) {
+    // se quantidade for 0, remover do carrinho
+    if (quantity === 0) {
+      res.locals.cart.items = res.locals.cart.items.filter(item => item.product_id !== productId)
+    } else {
+      item.quantity = quantity
+    }
+  }
+
+  res.cookie('cart', res.locals.cart)
+
+  // redirecionar para o carrinho
+  res.redirect('/cart')
+})
+
 const PORT = process.env.PORT || 15000
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`Server running: http://localhost:${PORT}/`)
 })
