@@ -1,0 +1,32 @@
+<%- contentFor('body') %>
+<h2>Login</h2>
+
+<form method="post" action="/login">
+
+  <% if (ret.messages.length) { %>
+    <div class="alert alert-<%- ret.error ? 'danger' : 'success' %>">
+      <%- ret.messages.join('<br>') %>
+    </div>
+  <% } %>
+
+  <div class="form-group <%- ret.fields.email.error ? 'has-error' : '' %>">
+    <label for="email">E-mail</label>
+    <input type="email" name="email" id="email" class="form-control" placeholder="E-mail" value="<%- ret.fields.email.value %>">
+    <% if (ret.fields.email.messages.length) { %>
+      <small class="help-block"><%- ret.fields.email.messages.join('<br>') %></small>
+    <% } %>
+  </div>
+
+  <div class="form-group <%- ret.fields.password.error ? 'has-error' : '' %>">
+    <label for="password">Senha</label>
+    <input type="password" name="password" id="password" class="form-control" placeholder="Senha" value="<%- ret.fields.password.value %>">
+    <% if (ret.fields.password.messages.length) { %>
+      <small class="help-block"><%- ret.fields.password.messages.join('<br>') %></small>
+    <% } %>
+  </div>
+
+  <div>
+    <button type="submit" class="btn btn-primary">Login</button>
+  </div>
+
+</form>
